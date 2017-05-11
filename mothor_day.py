@@ -1,6 +1,10 @@
+#!/usr/bin/python
+#coding=utf-8
+
 import time, random
 import threading
 from functools import wraps
+
 
 # 孕期，你懂的
 PREGNANCY = [
@@ -33,10 +37,11 @@ WHAT_MOTHER_CARES = [
 	'天冷了，多加衣',
 	'天热了，买点衣服吧',
 	'都10点了，还不起床',
-	'快点，要吃迟到了',
+	'快点，要迟到了',
 	'有点出息行不',
 	'妈妈想你了...'
 ]
+
 
 def coroutine(func):
     ''' 协程装饰器，调用一次next，进入等待 '''
@@ -48,10 +53,30 @@ def coroutine(func):
     return wrapper
 
 
-class Common(object):
-	''' 公共类 '''
+class Person(object):
+	''' 人 '''
 	def __init__(self):
 		self.age = 0
+
+
+class Growing(object):
+
+	def __init__(self, monther, child, condition):
+		self.monther = monther
+		self.child = child
+		self.condition = condition
+
+	def grow_up(self):
+		''' 年龄增长，此处，我和母亲的年龄同时增长 '''
+		try:
+			self.condition.acquire()
+			# 随机增长年龄
+			age = random.randint(1,3)
+			# age = 1
+			self.monther.age += age
+			self.child.age += age
+		finally:
+			self.condition.release()
 
 	def time_lapse(self):
 		''' 时间流逝 '''
@@ -60,19 +85,19 @@ class Common(object):
 		except InterruptedError:
 			pass
 
-	def growing_old(self):
-		''' 妈妈在变老，我在长大 '''
-		self.age += random.randint(1, 3)
 
+class MotherGrowing(Growing):
 
-class Mother(Common):
+	def __init__(self, *args, **kwargs):
+		super(MotherGrowing, self).__init__(*args, **kwargs)
+		self.monther.age = 22
 
 	def growing(self):
 		''' 妈妈在变老 '''
-		self.growing_old()
+		self.grow_up()
 		if self.age > 60:
 			print('<<<<<<<<<<<<<<妈妈老了>>>>>>>>>')
-		print('----->妈妈【{0}】岁了'.format(self.age))
+		# print('----->妈妈【{0}】岁了'.format(self.age))
 
 	def pregnant(self):
 		''' 孕期 '''
@@ -90,13 +115,14 @@ class Mother(Common):
 		while True:
 			something = (yield)
 			self.time_lapse()
-			print('>>你说要：[%s]， 妈妈给你 【%s】' % (something, something))
+			print('[妈{0}岁, 我{1}岁]>>你说要：[{2}]， 妈妈给你 【{2}】'.format(
+				self.monther.age, self.child.age, something))
 
-	def to_child(self, my_child):
+	def to_child(self, cg):
 		''' 对孩子的关怀 '''
-		care = my_child.from_monther()
+		care = cg.from_monther()
 		max_count = 0
-		while max_count < 50:
+		while max_count < 20:
 			index = random.randint(0, len(WHAT_MOTHER_CARES) - 1)
 			# 不间断的关怀
 			care.send(WHAT_MOTHER_CARES[index])
@@ -105,23 +131,28 @@ class Mother(Common):
 			self.growing()
 
 	def say(self):
-		print('妈妈对孩子说，你是好样的！')
+		print('{0}岁妈妈对{1}岁孩子说，你是好样的！'.format(
+			self.monther.age,
+			self.child.age))
 
 
-class Me(Common):
+class ChildGrowing(Growing):
+
+	def __init__(self, *args, **kwargs):
+		super(ChildGrowing, self).__init__(*args, **kwargs)
 
 	def growing(self):
 		''' 我长大了 '''
-		self.growing_old()
-		if self.age > 18:
+		self.grow_up()
+		if self.child.age > 18:
 			print('<<<<<<<<<<<<<<我长大了>>>>>>>>>')
-		print('-----<我【{0}】岁了'.format(self.age))
+		# print('-----<我【{0}】岁了'.format(self.age))
 
-	def to_mother(self, my_mothoer):
+	def to_mother(self, mg):
 		''' 向妈妈索取 '''
-		say = my_mothoer.from_child()
+		say = mg.from_child()
 		max_count = 0
-		while max_count < 50:
+		while max_count < 20:
 			index = random.randint(0, len(WHAT_I_WANTS) - 1)
 			# 不间断索取
 			say.send(WHAT_I_WANTS[index])
@@ -135,21 +166,31 @@ class Me(Common):
 		while True:
 			care = (yield)
 			self.time_lapse()
-			print('<<妈妈说：{}'.format(care))
+			print('[我{0}岁, 妈{1}岁]<<妈妈说：{2}'.format(
+				self.child.age,
+				self.monther.age,
+				care))
 
 	def say(self):
-		print('我说：妈，您辛苦了，母情节快乐！')
+		print('{0}岁的我对{1}岁的妈说：妈，您辛苦了，母亲节快乐！'.format(
+			self.child.age,
+			self.monther.age
+			))
 
 
 def main():
-	monther = Mother()
-	me = Me()
-	monther.pregnant()
+	monther = Person()
+	me = Person()
+	condition = threading.Condition()
 
+	g_mother = MotherGrowing(monther, me, condition)
+	g_mother.pregnant()
+
+	g_me = ChildGrowing(monther, me, condition)
 	# 妈妈线程
-	t_mothor = threading.Thread(target=monther.to_child, args=(me,))
+	t_mothor = threading.Thread(target=g_mother.to_child, args=(g_me,))
 	# 我的线程
-	t_me = threading.Thread(target=me.to_mother, args=(monther,))
+	t_me = threading.Thread(target=g_me.to_mother, args=(g_mother, ))
 
 	t_mothor.start()
 	t_me.start()
@@ -158,9 +199,9 @@ def main():
 	t_me.join()
 
 	# 我说
-	me.say()
+	g_me.say()
 	# 妈妈说
-	monther.say()
+	g_mother.say()
 
 if __name__ == '__main__':
 	main()
