@@ -80,7 +80,7 @@ class Mother(Common):
 		print('---那一年，妈妈%d 岁----' % self.age)
 		# 成长周期
 		for week, desc in enumerate(PREGNANCY):
-			print("[第{0}周] {1}".format(week + 1, desc))
+			print("[第{0}月] {1}".format(week + 1, desc))
 			# 这里是漫长的等待
 			self.time_lapse()
 
